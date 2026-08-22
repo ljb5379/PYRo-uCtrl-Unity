@@ -83,6 +83,10 @@ class dji_m3508_motor_drv_t : public dji_motor_drv_t
   public:
     static constexpr float reduction_ratio = 19.20320855614973f;
     static constexpr float reciprocal_reduction_ratio =  0.0520746310219994f;
+
+    static constexpr float reduction_ratio_xroll = 15.70320855614973f;
+    static constexpr float reciprocal_reduction_ratio_xroll = 1/15.70320855614973f;
+
     static constexpr float reduction_ratio_14 = 13.77f;
     static constexpr float reciprocal_reduction_ratio_14 =  1 / reduction_ratio_14;
     dji_m3508_motor_drv_t(pyro::dji_motor_tx_frame_t::register_id_t id,

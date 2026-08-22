@@ -68,34 +68,48 @@ rudder_kin_t::solve(const float vx, const float vy, const float wz,
                     const rudder_states_t &current_states) const
 {
     rudder_states_t target_states{};
+    if(fabsf(vx)+fabsf(vy)+fabsf(wz) < 0.02f){
+
+        target_states.modules[0].angle =   -PI/4 ;
+        target_states.modules[1].angle =    PI/4 ;
+        target_states.modules[2].angle = -3*PI/4 ;
+        target_states.modules[3].angle =  3*PI/4 ;
+    }
+    else{
     target_states.modules[0].angle =
-        atan2f(vx + wz * _half_wheelbase, vy + wz * _half_track_width);
-    target_states.modules[1].angle =
         atan2f(vx - wz * _half_wheelbase, vy + wz * _half_track_width);
+    target_states.modules[1].angle =
+        atan2f(vx + wz * _half_wheelbase, vy + wz * _half_track_width);
     target_states.modules[2].angle =
         atan2f(vx - wz * _half_wheelbase, vy - wz * _half_track_width);
     target_states.modules[3].angle =
         atan2f(vx + wz * _half_wheelbase, vy - wz * _half_track_width);
-
+    }
+    float coserror[4]={0};
     for (int i = 0; i < 4; i++)
     {
         calc_angle(target_states.modules[i].angle,
                    current_states.modules[i].angle,
                    target_states.modules[i].direction);
+                   coserror[i] = fabsf(cosf(target_states.modules[i].angle  - current_states.modules[i].angle));
     }
 
     target_states.modules[0].speed =
-        hypotf(vx - wz * _half_wheelbase, vy - wz * _half_track_width) *
+        hypotf(vx - wz * _half_wheelbase, vy - wz * _half_track_width) * //coserror[0] *
         target_states.modules[0].direction;
     target_states.modules[1].speed =
-        hypotf(vx - wz * _half_wheelbase, vy + wz * _half_track_width) *
+        hypotf(vx - wz * _half_wheelbase, vy + wz * _half_track_width) * //coserror[1] *
         target_states.modules[1].direction;
     target_states.modules[2].speed =
-        hypotf(vx + wz * _half_wheelbase, vy + wz * _half_track_width) *
+        hypotf(vx + wz * _half_wheelbase, vy + wz * _half_track_width) * //coserror[2] *
         target_states.modules[2].direction;
     target_states.modules[3].speed =
-        hypotf(vx + wz * _half_wheelbase, vy - wz * _half_track_width) *
+        hypotf(vx + wz * _half_wheelbase, vy - wz * _half_track_width) * //coserror[3] *
         target_states.modules[3].direction;
+
+    
+
+    
 
     return target_states;
 }
