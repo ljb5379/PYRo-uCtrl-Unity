@@ -16,18 +16,21 @@
 #include "pyro_dwt_drv.h"
 #include <math.h>
 
+
+
 float BMI088_ACCEL_SEN = BMI088_ACCEL_6G_SEN;
 float BMI088_GYRO_SEN = BMI088_GYRO_2000_SEN;
 
 static uint8_t res = 0;
 static uint8_t write_reg_num = 0;
 static uint8_t error = BMI088_NO_ERROR;
-float gyroDiff[3], gNormDiff;
+static float gyroDiff[3], gNormDiff;
+
+static IMU_Data_t*  bmi088_cali_imu_data;
 
 uint8_t caliOffset = 1;
 int16_t caliCount = 0;
 
-IMU_Data_t BMI088;
 
 #if defined(BMI088_USE_SPI)
 
@@ -45,7 +48,6 @@ IMU_Data_t BMI088;
         (data) = BMI088_read_write_byte(0x55);  \
         BMI088_ACCEL_NS_H();                    \
     }
-//#define BMI088_accel_write_muli_reg( reg,  data, len) { BMI088_ACCEL_NS_L(); BMI088_write_muli_reg(reg, data, len); BMI088_ACCEL_NS_H(); }
 #define BMI088_accel_read_muli_reg(reg, data, len) \
     {                                              \
         BMI088_ACCEL_NS_L();                       \
@@ -53,7 +55,6 @@ IMU_Data_t BMI088;
         BMI088_read_muli_reg(reg, data, len);      \
         BMI088_ACCEL_NS_H();                       \
     }
-
 #define BMI088_gyro_write_single_reg(reg, data) \
     {                                           \
         BMI088_GYRO_NS_L();                     \
@@ -66,7 +67,6 @@ IMU_Data_t BMI088;
         BMI088_read_single_reg((reg), &(data)); \
         BMI088_GYRO_NS_H();                     \
     }
-//#define BMI088_gyro_write_muli_reg( reg,  data, len) { BMI088_GYRO_NS_L(); BMI088_write_muli_reg( ( reg ), ( data ), ( len ) ); BMI088_GYRO_NS_H(); }
 #define BMI088_gyro_read_muli_reg(reg, data, len)   \
     {                                               \
         BMI088_GYRO_NS_L();                         \
@@ -74,11 +74,37 @@ IMU_Data_t BMI088;
         BMI088_GYRO_NS_H();                         \
     }
 
-static void
-BMI088_write_single_reg(uint8_t reg, uint8_t data);
+
+static void BMI088_write_single_reg(uint8_t reg, uint8_t data);
 static void BMI088_read_single_reg(uint8_t reg, uint8_t *return_data);
-// static void BMI088_write_muli_reg(uint8_t reg, uint8_t* buf, uint8_t len );
 static void BMI088_read_muli_reg(uint8_t reg, uint8_t *buf, uint8_t len);
+
+static void BMI088_write_single_reg(uint8_t reg, uint8_t data)
+{
+    BMI088_read_write_byte(reg);
+    BMI088_read_write_byte(data);
+}
+
+static void BMI088_read_single_reg(uint8_t reg, uint8_t *return_data)
+{
+    BMI088_read_write_byte(reg | 0x80);
+    *return_data = BMI088_read_write_byte(0x55);
+}
+
+static void BMI088_read_muli_reg(uint8_t reg, uint8_t *buf, uint8_t len)
+{
+    BMI088_read_write_byte(reg | 0x80);
+
+    while (len != 0)
+    {
+
+        *buf = BMI088_read_write_byte(0x55);
+        buf++;
+        len--;
+    }
+}
+
+
 
 #elif defined(BMI088_USE_IIC)
 
@@ -109,7 +135,6 @@ static uint8_t write_BMI088_gyro_reg_data_error[BMI088_WRITE_GYRO_REG_NUM][3] =
 static void Calibrate_MPU_Offset(const bmi088_config_t *config, IMU_Data_t *bmi088);
 
 
-
 uint8_t BMI088_init(SPI_HandleTypeDef *bmi088_SPI, const bmi088_config_t *config, IMU_Data_t* imu_data)
 {
     BMI088_SPI = bmi088_SPI;
@@ -132,7 +157,7 @@ uint8_t BMI088_init(SPI_HandleTypeDef *bmi088_SPI, const bmi088_config_t *config
     return error;
 }
 
-//У׼��Ư
+//У׼��Ư
 void Calibrate_MPU_Offset(const bmi088_config_t *config, IMU_Data_t *bmi088)
 {
     static float startTime;
@@ -390,45 +415,36 @@ void BMI088_Read(IMU_Data_t *bmi088)
     bmi088->Temperature = bmi088_raw_temp * BMI088_TEMP_FACTOR + BMI088_TEMP_OFFSET;
 }
 
-#if defined(BMI088_USE_SPI)
+status_t BMI088_driver_t::imu_init(imu_config_t _config) {
+        bmi088_config_t bmi_cfg;
+        bmi_cfg.calibrate = _config.calibrate ? 1 : 0;
+        bmi_cfg.gx_offset = _config.gx_offset;
+        bmi_cfg.gy_offset = _config.gy_offset;
+        bmi_cfg.gz_offset = _config.gz_offset;
+        bmi_cfg.g_norm = _config.g_norm;
 
-static void BMI088_write_single_reg(uint8_t reg, uint8_t data)
-{
-    BMI088_read_write_byte(reg);
-    BMI088_read_write_byte(data);
+        bmi088_cali_imu_data = &_imu_data;//全局观测数据
+        for (uint16_t count = 0; BMI088_init(&hspi2, &bmi_cfg,
+                                                &_imu_data) != BMI088_NO_ERROR &&
+                                    count < 10;
+                count++)
+        {
+            if (count >= 255)
+            {
+                return PYRO_ERROR;
+            }
+        }
+        return PYRO_OK;
+}
+void BMI088_driver_t::imu_update(){
+    BMI088_Read(&_imu_data);
+    
+}
+void BMI088_driver_t::get_imu_data(IMU_Data_t &imu_data){
+    imu_data = _imu_data;
 }
 
-static void BMI088_read_single_reg(uint8_t reg, uint8_t *return_data)
-{
-    BMI088_read_write_byte(reg | 0x80);
-    *return_data = BMI088_read_write_byte(0x55);
+BMI088_driver_t& BMI088_driver_t::get_instance() {
+    static BMI088_driver_t instance;
+    return instance;
 }
-
-// static void BMI088_write_muli_reg(uint8_t reg, uint8_t* buf, uint8_t len )
-//{
-//     BMI088_read_write_byte( reg );
-//     while( len != 0 )
-//     {
-
-//        BMI088_read_write_byte( *buf );
-//        buf ++;
-//        len --;
-//    }
-
-//}
-
-static void BMI088_read_muli_reg(uint8_t reg, uint8_t *buf, uint8_t len)
-{
-    BMI088_read_write_byte(reg | 0x80);
-
-    while (len != 0)
-    {
-
-        *buf = BMI088_read_write_byte(0x55);
-        buf++;
-        len--;
-    }
-}
-#elif defined(BMI088_USE_IIC)
-
-#endif

@@ -4,7 +4,7 @@
 #include "stdint.h"
 #include "pyro_core_config.h"
 #include "spi.h"
-
+#include "imu_base.h"
 #define BMI088_TEMP_FACTOR 0.125f
 #define BMI088_TEMP_OFFSET 23.0f
 
@@ -35,20 +35,20 @@
 
 
 
-typedef struct
-{
-    float Accel[3];
+// typedef struct
+// {
+//     float Accel[3];
 
-    float Gyro[3];
+//     float Gyro[3];
 
-    float TempWhenCali;
-    float Temperature;
+//     float TempWhenCali;
+//     float Temperature;
 
-    float AccelScale;
-    float GyroOffset[3];
+//     float AccelScale;
+//     float GyroOffset[3];
 
-    float gNorm;
-} IMU_Data_t;
+//     float gNorm;
+// } IMU_Data_t;
 
 enum
 {
@@ -72,21 +72,46 @@ enum
     BMI088_NO_SENSOR = 0xFF,
 };
 
-typedef struct
-{
-    uint8_t calibrate;
-    float gx_offset;
-    float gy_offset;
-    float gz_offset;
-    float g_norm;
-} bmi088_config_t;
+// typedef struct
+// {
+//     uint8_t calibrate;
+//     float gx_offset;
+//     float gy_offset;
+//     float gz_offset;
+//     float g_norm;
+// } bmi088_config_t;
+using bmi088_config_t = imu_config_t;
+
+
+
+
 
 extern uint8_t BMI088_init(SPI_HandleTypeDef *bmi088_SPI, const bmi088_config_t *config, IMU_Data_t* imu_data);
 extern uint8_t bmi088_accel_init(void);
 extern uint8_t bmi088_gyro_init(void);
-
-extern IMU_Data_t BMI088;
-
 extern void BMI088_Read(IMU_Data_t *bmi088);
+
+
+//类化，为ins提供统一接口
+class BMI088_driver_t:public imu_base_t
+{
+public:
+    static BMI088_driver_t& get_instance();
+    BMI088_driver_t(const BMI088_driver_t&) = delete;
+    BMI088_driver_t& operator=(const BMI088_driver_t&) = delete;
+    BMI088_driver_t(BMI088_driver_t&&) = delete;
+    BMI088_driver_t& operator=(BMI088_driver_t&&) = delete;
+    
+    status_t imu_init(imu_config_t _config) override;
+    void imu_update() override;
+    void get_imu_data(IMU_Data_t &imu_data) override;
+
+private:
+    IMU_Data_t _imu_data;
+
+    BMI088_driver_t() = default;
+    ~BMI088_driver_t() = default;
+};
+
 
 #endif

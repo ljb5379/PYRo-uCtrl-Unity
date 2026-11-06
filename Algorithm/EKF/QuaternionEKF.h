@@ -1,18 +1,11 @@
-/**
- ******************************************************************************
- * @file    QuaternionEKF.h
- * @author  Wang Hongxi
- * @version V1.2.0
- * @date    2022/3/8
- * @brief   attitude update with gyro bias estimate and chi-square test
- ******************************************************************************
- * @attention
- *
- ******************************************************************************
- */
 #ifndef _QUAT_EKF_H
 #define _QUAT_EKF_H
 #include "kalman_filter.h"
+
+namespace pyro
+{
+class ins_drv_t;
+
 
 /* boolean type definitions */
 #ifndef TRUE
@@ -23,8 +16,30 @@
 #define FALSE 0 /**< boolean fails */
 #endif
 
-typedef struct
+
+class QuaternionEKF_t
 {
+    friend class ins_drv_t;
+public:
+    QuaternionEKF_t();
+    void QuaternionEKF_Init(float process_noise1, float process_noise2, float measure_noise, float lambda, float lpf);
+    
+    //void get_quaternion(float* q0, float* q1, float* q2, float* q3);
+
+    void QuaternionEKF_Update(float gx, float gy, float gz, float ax, float ay, float az, float dt);
+
+
+    //好像没啥用，除了observe功能将值传出后可以用于观察
+    float IMU_QuaternionEKF_P[36];                              
+    float IMU_QuaternionEKF_K[18];
+    float IMU_QuaternionEKF_H[18];
+
+public:
+//先都搬过来
+    static void IMU_QuaternionEKF_xhatUpdate(KalmanFilter_t *kf);
+    static void IMU_QuaternionEKF_Observe(KalmanFilter_t *kf);
+    static void IMU_QuaternionEKF_F_Linearization_P_Fading(KalmanFilter_t *kf);
+    static void IMU_QuaternionEKF_SetH(KalmanFilter_t *kf);
     uint8_t Initialized;
     KalmanFilter_t IMU_QuaternionEKF;
     uint8_t ConvergeFlag;
@@ -64,12 +79,8 @@ typedef struct
     int16_t YawRoundCount;
 
     float YawAngleLast;
-} QEKF_INS_t;
+};
 
-extern QEKF_INS_t QEKF_INS;
-extern float chiSquare;
-extern float ChiSquareTestThreshold;
-void IMU_QuaternionEKF_Init(float process_noise1, float process_noise2, float measure_noise, float lambda, float lpf);
-void IMU_QuaternionEKF_Update(float gx, float gy, float gz, float ax, float ay, float az, float dt);
+}
 
 #endif

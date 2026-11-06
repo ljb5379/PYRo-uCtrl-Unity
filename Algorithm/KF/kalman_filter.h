@@ -84,6 +84,8 @@ typedef struct kf_t
     int8_t MatStatus;
 
     // 用户定义函数,可以替换或扩展基准KF的功能
+    void* UserData; // 用户数据指针，用于调用用户数据
+
     void (*User_Func0_f)(struct kf_t *kf);
     void (*User_Func1_f)(struct kf_t *kf);
     void (*User_Func2_f)(struct kf_t *kf);

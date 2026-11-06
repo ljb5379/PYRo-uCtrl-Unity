@@ -1,30 +1,36 @@
 #include "pyro_ins.h"
 #include "pyro_dwt_drv.h"
 #include "QuaternionEKF.h"
+#include <map>
+#include "DM_IMU_L1.h"
 using namespace pyro;
 
 #define X            0
 #define Y            1
 #define Z            2
 
+namespace pyro{
+std::map<ins_key, ins_drv_t *> ins_map;
+
+IMU_Data_t *g_imu_data;//用于观测，可删
 
 
-IMU_Data_t *g_imu_data;
-
-// Define static TaskHandle_t declared in pyro::ins_drv_t
-TaskHandle_t pyro::ins_drv_t::_ins_task_handle = nullptr;
-
-ins_drv_t *ins_drv_t::get_instance(void)
+ins_drv_t *ins_drv_t::get_instance(ins_key key)
 {
-    static ins_drv_t instance;
-    return &instance;
+    if (ins_map.find(key) == ins_map.end())
+    {
+        ins_map[key] = new ins_drv_t(key);
+    }
+    return ins_map[key];
+        
 }
 
 
 
-status_t ins_drv_t::init(const ins_config_t &config)
+status_t ins_drv_t::init(const ins_config_t &config, imu_base_t* imu_drv)
 {
     _config = config;
+    _imu_drv = imu_drv;
 
     // 解析轴向方向映射
     switch (_config.direct)
@@ -62,26 +68,25 @@ status_t ins_drv_t::init(const ins_config_t &config)
             _x_neg = false; _y_neg = false; _z_neg = true;
             break;
     }
-
-    g_imu_data = &imu_data;
-    bmi088_config_t bmi_cfg;
-    bmi_cfg.calibrate = _config.calibrate ? 1 : 0;
-    bmi_cfg.gx_offset = _config.gx_offset;
-    bmi_cfg.gy_offset = _config.gy_offset;
-    bmi_cfg.gz_offset = _config.gz_offset;
-    bmi_cfg.g_norm = _config.g_norm;
-
-    for (uint16_t count = 0; BMI088_init(&hspi2, &bmi_cfg,
-                                         &imu_data) != BMI088_NO_ERROR &&
-                             count < 10;
-         count++)
+// 初始化EKF
+    if(_quaternion_ekf == nullptr)
     {
-        if (count >= 255)
-        {
-            return PYRO_ERROR;
-        }
+        _quaternion_ekf = new QuaternionEKF_t();
     }
+// 观测数据
+    g_imu_data = &imu_data;
+// 初始化IMU
+    imu_config_t imu_config;
+    imu_config.calibrate = _config.calibrate;
+    imu_config.gx_offset = _config.gx_offset;
+    imu_config.gy_offset = _config.gy_offset;
+    imu_config.gz_offset = _config.gz_offset;
+    imu_config.g_norm = _config.g_norm;
 
+    imu_drv->imu_init(imu_config);
+
+
+//初始化任务
     if (_ins_task_handle == nullptr)
     {
         xTaskCreate(__static_ins_task, "ins_task", 512, this, 2,
@@ -91,6 +96,7 @@ status_t ins_drv_t::init(const ins_config_t &config)
     {
         return PYRO_ERROR;
     }
+    
     if (_config.calibrate)
     {
         return PYRO_WARNING;
@@ -99,20 +105,25 @@ status_t ins_drv_t::init(const ins_config_t &config)
 }
 
 void ins_drv_t::__static_ins_task(void *argument)
-{
-    ((ins_drv_t *)argument)->__ins_task();
+{   
+    auto* instance = static_cast<ins_drv_t*>(argument);
+    instance->__ins_task();
 }
 
 void ins_drv_t::__ins_task()
-{
+{   
     _dwt_cnt = 0;
-    IMU_QuaternionEKF_Init(10, 0.001, 10000000, 0.9996, 0.004f);
+    _quaternion_ekf->QuaternionEKF_Init(10, 0.001, 10000000, 0.9996, 0.004f);
+    //IMU_QuaternionEKF_Init(10, 0.001, 10000000, 0.9996, 0.004f);
 
     while (1)
     {
         _dt = dwt_drv_t::get_delta_t(&_dwt_cnt);
         _t += _dt;
-        BMI088_Read(&imu_data);
+//调用驱动指针获取数
+        _imu_drv->imu_update();
+        _imu_drv->get_imu_data(imu_data);
+        
         if (_x_neg)
         {
             _acc_b[X]  = -imu_data.Accel[_imu_x_idx];
@@ -146,14 +157,14 @@ void ins_drv_t::__ins_task()
 
 
 
-        IMU_QuaternionEKF_Update(_gyro_b[X], _gyro_b[Y], _gyro_b[Z], _acc_b[X],
+        _quaternion_ekf->QuaternionEKF_Update(_gyro_b[X], _gyro_b[Y], _gyro_b[Z], _acc_b[X],
                                  _acc_b[Y], _acc_b[Z], _dt);
-       memcpy(_q, QEKF_INS.q, sizeof(QEKF_INS.q));
+       memcpy(_q, _quaternion_ekf->q, sizeof(_quaternion_ekf->q));
 
 
-        _angle_n[X] = QEKF_INS.Roll;
-        _angle_n[Y] = QEKF_INS.Pitch;
-        _angle_n[Z] = QEKF_INS.Yaw;
+        _angle_n[X] = _quaternion_ekf->Roll;
+        _angle_n[Y] = _quaternion_ekf->Pitch;
+        _angle_n[Z] = _quaternion_ekf->Yaw;
 
         vTaskDelay(1);
     }
@@ -268,4 +279,6 @@ status_t ins_drv_t::get_quaternion(float *q0, float *q1, float *q2, float *q3)
     *q2 = _q[2];
     *q3 = _q[3];
     return PYRO_OK;
+}
+
 }

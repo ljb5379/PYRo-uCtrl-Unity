@@ -6,6 +6,25 @@
 #include "BMI088_driver.h"
 #include "FreeRTOS.h"
 #include "task.h"
+namespace pyro{
+
+class QuaternionEKF_t;
+
+enum class imu_source_t :uint8_t{
+    BMI088      = 0,
+    DM_IMU_L1   = 1
+};
+
+struct ins_key{
+    uint8_t imu_id;
+    imu_source_t imu_source;
+    bool operator<(const ins_key &rhs) const
+    {
+        if (imu_source != rhs.imu_source)
+            return imu_source < rhs.imu_source;
+        return imu_id < rhs.imu_id;
+    }
+};
 struct ins_config_t
 {
     enum class imu_direct_t : uint8_t
@@ -20,7 +39,9 @@ struct ins_config_t
         DIRECT_8 = 8
     };
 
+
     imu_direct_t direct = imu_direct_t::DIRECT_1;
+
     bool calibrate      = false;
     float gx_offset     = 0.0f;
     float gy_offset     = 0.0f;
@@ -28,9 +49,12 @@ struct ins_config_t
     float g_norm        = 9.80665f;
 };
 
-namespace pyro {
 
+// template <imu_source_t source>
 class ins_drv_t {
+    
+
+
 private:
     IMU_Data_t imu_data;
     //quaternion=q0+i*q1+j*q2+k*q3
@@ -55,14 +79,24 @@ private:
     bool _z_neg;
 
     ins_config_t _config;
+    ins_key _key;
+    imu_base_t* _imu_drv;
 
-    static TaskHandle_t _ins_task_handle;
+    
+
+    TaskHandle_t _ins_task_handle;
+
+    explicit ins_drv_t(ins_key key) : _quaternion_ekf(nullptr), _ins_task_handle(nullptr),
+                                      _imu_drv(nullptr), _key(key) {
+
+    }
+
     void __ins_task();
     static void __static_ins_task(void *argument);
     
 public:
-    static ins_drv_t* get_instance(void);
-    status_t init(const ins_config_t &config);
+    static ins_drv_t* get_instance(ins_key key);
+    status_t init(const ins_config_t &config, imu_base_t* imu_drv);
     status_t get_angles_b(float *yaw, float *pitch, float *roll);
     status_t get_angles_n(float *yaw, float *pitch, float *roll);
     status_t get_rads_b(float* rad_yaw, float* rad_pitch, float* rad_roll);
@@ -72,6 +106,8 @@ public:
     status_t get_accel_b(float* accel_x, float* accel_y, float* accel_z);
     status_t get_accel_n(float* accel_x, float* accel_y, float* accel_z);
     status_t get_quaternion(float* q0, float* q1, float* q2, float* q3);
+    QuaternionEKF_t* _quaternion_ekf;
 };
+
 }
 #endif
