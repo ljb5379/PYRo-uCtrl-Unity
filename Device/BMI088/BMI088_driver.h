@@ -102,7 +102,7 @@ public:
     BMI088_driver_t(BMI088_driver_t&&) = delete;
     BMI088_driver_t& operator=(BMI088_driver_t&&) = delete;
     
-    status_t imu_init(imu_config_t _config) override;
+    pyro::status_t imu_init(imu_config_t config) override;
     void imu_update() override;
     void get_imu_data(IMU_Data_t &imu_data) override;
 

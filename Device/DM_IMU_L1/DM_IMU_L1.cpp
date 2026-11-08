@@ -75,7 +75,7 @@ status_t dm_imu_l1_drv_t::init()
 
 status_t dm_imu_l1_drv_t::update_feedback()
 {
-    if(dwt_drv_t::get_current_ticks() - _last_rx_tick > 100000)
+    if(dwt_drv_t::get_timeline_s() - _last_rx_tick > 1.0f)
     {
         _is_online = false;
     }
@@ -91,7 +91,7 @@ status_t dm_imu_l1_drv_t::update_feedback()
     if(_msg_buffer->is_fresh()){
         _msg_buffer->mark_read();
         _is_online = true;
-        _last_rx_tick = dwt_drv_t::get_current_ticks();
+        _last_rx_tick = dwt_drv_t::get_timeline_s();
     }
     return _decode(frame);
 }
@@ -207,7 +207,7 @@ status_t dm_imu_l1_drv_t::_decode(const std::array<uint8_t, 8> &frame)
         default:
             return PYRO_WARNING;
     }
-    _last_rx_tick = dwt_drv_t::get_current_ticks();
+    _last_rx_tick = dwt_drv_t::get_timeline_s();
 
     return PYRO_OK;
 } 
@@ -231,6 +231,14 @@ status_t dm_imu_l1_drv_t::imu_init(imu_config_t _config) {
         _data.gNorm = _config.g_norm;
         _data.AccelScale = 9.81f / _data.gNorm;
         _data.TempWhenCali = 40;
+    }
+    float start_init_time = dwt_drv_t::get_timeline_s();
+    while(_is_online == false){
+        update_feedback();
+        float cur_time = dwt_drv_t::get_timeline_s();
+        if(cur_time - start_init_time > 5.0f){
+            return PYRO_ERROR;
+        }
     }
     
    return PYRO_OK;
@@ -396,6 +404,75 @@ void dm_imu_l1_drv_t::DM_Calibrate_MPU_Offset(const dm_imu_l1_config_t *config, 
     else
         dm_imu_data->AccelScale = 9.81f / config->g_norm;
 }
+
+
+
+
+status_t dm_imu_l1_drv_t::get_angles(float *yaw, float *pitch, float *roll)
+{
+    if (roll == nullptr || pitch == nullptr || yaw == nullptr)
+    {
+        return PYRO_ERROR;
+    }
+    *roll  = _data.roll;
+    *pitch = _data.pitch;
+    *yaw   = _data.yaw;
+    return PYRO_OK;
+}
+
+status_t dm_imu_l1_drv_t::get_rads(float *rad_yaw, float *rad_pitch,
+                               float *rad_roll)
+{
+    if (rad_roll == nullptr || rad_pitch == nullptr || rad_yaw == nullptr)
+    {
+        return PYRO_ERROR;
+    }
+    *rad_roll  = _data.roll * PI / 180.0f;
+    *rad_pitch = _data.pitch * PI / 180.0f;
+    *rad_yaw   = _data.yaw * PI / 180.0f;
+    return PYRO_OK;
+}
+
+
+status_t dm_imu_l1_drv_t::get_gyro(float *g_yaw, float *g_pitch, float *g_roll)
+{
+    if (g_yaw == nullptr || g_pitch == nullptr || g_roll == nullptr)
+    {
+        return PYRO_ERROR;
+    }
+    *g_roll  = _data.Gyro[0];
+    *g_pitch = _data.Gyro[1];
+    *g_yaw   = _data.Gyro[2];
+    return PYRO_OK;
+}
+
+
+status_t dm_imu_l1_drv_t::get_accel(float *accel_x, float *accel_y, float *accel_z)
+{
+    if (accel_x == nullptr || accel_y == nullptr || accel_z == nullptr)
+    {
+        return PYRO_ERROR;
+    }
+    *accel_x = _data.Accel[0];
+    *accel_y = _data.Accel[1];
+    *accel_z = _data.Accel[2];
+    return PYRO_OK;
+}
+
+
+status_t dm_imu_l1_drv_t::get_quaternion(float *q0, float *q1, float *q2, float *q3)
+{
+    if (q0 == nullptr || q1 == nullptr || q2 == nullptr || q3 == nullptr)
+    {
+        return PYRO_ERROR;
+    }
+    *q0 = _data.quaternion[0];
+    *q1 = _data.quaternion[1];
+    *q2 = _data.quaternion[2];
+    *q3 = _data.quaternion[3];
+    return PYRO_OK;
+}
+
 
 
 }// namespace

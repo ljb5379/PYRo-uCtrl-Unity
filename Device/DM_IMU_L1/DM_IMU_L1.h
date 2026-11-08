@@ -30,10 +30,10 @@ struct dm_imu_l1_data_t: public IMU_Data_t
 {
     // float accel[3];      ///< X/Y/Z 加速度，m/s^2
     // float gyro[3];       ///< X/Y/Z 角速度，rad/s
-    float roll;          ///< 横滚角，deg，[-180, 180]
-    float pitch;         ///< 俯仰角，deg，[-90, 90]
-    float yaw;           ///< 偏航角，deg，[-180, 180]
-    float quaternion[4]; ///< 四元数 w/x/y/z，归一化
+    float roll  = 0.0f;  ///< 横滚角，deg，[-180, 180]
+    float pitch = 0.0f;  ///< 俯仰角，deg，[-90, 90]
+    float yaw   = 0.0f;  ///< 偏航角，deg，[-180, 180]
+    float quaternion[4]{}; ///< 四元数 w/x/y/z，归一化
     // float temperature;   ///< 传感器温度，degC
     //新增————初始化数据
     // float g_norm;
@@ -88,10 +88,11 @@ class dm_imu_l1_drv_t:public imu_base_t
      * @retval PYRO_ERROR   驱动未初始化
      */
     status_t update_feedback();
-
+    
+  
 
     /**
-     * @brief 拷贝最新解算数据。
+     * @brief 拷贝全部最新解算数据。
      *
      * @retval PYRO_OK   已收到过数据
      * @retval PYRO_BUSY 尚未收到任何数据
@@ -104,10 +105,16 @@ class dm_imu_l1_drv_t:public imu_base_t
     bool is_online() const;
 
     void read_data(IMU_Data_t *imu_data);
-
+//ins 使用的接口函数
     status_t imu_init(imu_config_t _config) override;
     void imu_update() override;
     void get_imu_data(IMU_Data_t &imu_data) override;
+//其他使用的接口函数
+    status_t get_angles(float *yaw, float *pitch, float *roll);
+    status_t get_rads(float* rad_yaw, float* rad_pitch, float* rad_roll);
+    status_t get_gyro(float* g_yaw, float* g_pitch, float* g_roll);
+    status_t get_accel(float* accel_x, float* accel_y, float* accel_z);
+    status_t get_quaternion(float* q0, float* q1, float* q2, float* q3);
   private:
 //解码
     status_t _decode(const std::array<uint8_t, 8> &frame);
@@ -118,7 +125,7 @@ class dm_imu_l1_drv_t:public imu_base_t
     can_msg_buffer_t *_msg_buffer;
 
     dm_imu_l1_data_t _data;
-    TickType_t _last_rx_tick;
+    float _last_rx_tick;
 
     bool _is_online;
     uint8_t _last_frame_type; // 最近一次解码的帧类型，校准用

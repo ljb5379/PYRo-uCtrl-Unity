@@ -34,7 +34,7 @@ public:
     float IMU_QuaternionEKF_K[18];
     float IMU_QuaternionEKF_H[18];
 
-public:
+private:
 //先都搬过来
     static void IMU_QuaternionEKF_xhatUpdate(KalmanFilter_t *kf);
     static void IMU_QuaternionEKF_Observe(KalmanFilter_t *kf);

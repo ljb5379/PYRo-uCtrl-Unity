@@ -16,8 +16,8 @@ enum class imu_source_t :uint8_t{
 };
 
 struct ins_key{
-    uint8_t imu_id;
-    imu_source_t imu_source;
+    uint8_t imu_id = 0;
+    imu_source_t imu_source = imu_source_t::BMI088;
     bool operator<(const ins_key &rhs) const
     {
         if (imu_source != rhs.imu_source)
@@ -56,46 +56,42 @@ class ins_drv_t {
 
 
 private:
-    IMU_Data_t imu_data;
+    IMU_Data_t imu_data{};
     //quaternion=q0+i*q1+j*q2+k*q3
-    float _q[4];
-    float _gyro_b[3];
-    float _gyro_n[3];
-    float _acc_b[3];
-    float _acc_n[3];
-    float _angle_b[3];
-    float _angle_n[3];
+    float _q[4]{1.0f, 0.0f, 0.0f, 0.0f};
+    float _gyro_b[3]{};
+    float _gyro_n[3]{};
+    float _acc_b[3]{};
+    float _acc_n[3]{};
+    float _angle_b[3]{};
+    float _angle_n[3]{};
 
-    float _dt;
-    float _t;
-    uint32_t _dwt_cnt;
+    float _dt         = 0.0f;
+    float _t          = 0.0f;
+    uint32_t _dwt_cnt = 0;
 
     // 动态轴向映射
-    uint8_t _imu_x_idx;
-    uint8_t _imu_y_idx;
-    uint8_t _imu_z_idx;
-    bool _x_neg;
-    bool _y_neg;
-    bool _z_neg;
+    uint8_t _imu_x_idx = 0;
+    uint8_t _imu_y_idx = 1;
+    uint8_t _imu_z_idx = 2;
+    bool _x_neg        = false;
+    bool _y_neg        = false;
+    bool _z_neg        = false;
 
-    ins_config_t _config;
-    ins_key _key;
-    imu_base_t* _imu_drv;
+    ins_config_t _config{};
+    ins_key _key{};
+    imu_base_t* _imu_drv = nullptr;
 
-    
+    TaskHandle_t _ins_task_handle = nullptr;
 
-    TaskHandle_t _ins_task_handle;
-
-    explicit ins_drv_t(ins_key key) : _quaternion_ekf(nullptr), _ins_task_handle(nullptr),
-                                      _imu_drv(nullptr), _key(key) {
-
+    explicit ins_drv_t(ins_key key) : _key(key)
+    {
     }
 
     void __ins_task();
     static void __static_ins_task(void *argument);
-    
 public:
-    static ins_drv_t* get_instance(ins_key key);
+    static ins_drv_t* get_instance(ins_key key = ins_key{});
     status_t init(const ins_config_t &config, imu_base_t* imu_drv);
     status_t get_angles_b(float *yaw, float *pitch, float *roll);
     status_t get_angles_n(float *yaw, float *pitch, float *roll);
@@ -106,7 +102,9 @@ public:
     status_t get_accel_b(float* accel_x, float* accel_y, float* accel_z);
     status_t get_accel_n(float* accel_x, float* accel_y, float* accel_z);
     status_t get_quaternion(float* q0, float* q1, float* q2, float* q3);
-    QuaternionEKF_t* _quaternion_ekf;
+
+    // 调试/观测用，保持公开
+    QuaternionEKF_t* _quaternion_ekf = nullptr;
 };
 
 }

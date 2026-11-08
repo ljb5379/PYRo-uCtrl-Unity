@@ -16,6 +16,8 @@
 #include "pyro_dwt_drv.h"
 #include <math.h>
 
+using namespace pyro;
+
 
 
 float BMI088_ACCEL_SEN = BMI088_ACCEL_6G_SEN;
@@ -415,26 +417,26 @@ void BMI088_Read(IMU_Data_t *bmi088)
     bmi088->Temperature = bmi088_raw_temp * BMI088_TEMP_FACTOR + BMI088_TEMP_OFFSET;
 }
 
-status_t BMI088_driver_t::imu_init(imu_config_t _config) {
-        bmi088_config_t bmi_cfg;
-        bmi_cfg.calibrate = _config.calibrate ? 1 : 0;
-        bmi_cfg.gx_offset = _config.gx_offset;
-        bmi_cfg.gy_offset = _config.gy_offset;
-        bmi_cfg.gz_offset = _config.gz_offset;
-        bmi_cfg.g_norm = _config.g_norm;
+status_t BMI088_driver_t::imu_init(imu_config_t config)
+{
+    bmi088_config_t bmi_cfg;
+    bmi_cfg.calibrate = config.calibrate;
+    bmi_cfg.gx_offset = config.gx_offset;
+    bmi_cfg.gy_offset = config.gy_offset;
+    bmi_cfg.gz_offset = config.gz_offset;
+    bmi_cfg.g_norm    = config.g_norm;
 
-        bmi088_cali_imu_data = &_imu_data;//全局观测数据
-        for (uint16_t count = 0; BMI088_init(&hspi2, &bmi_cfg,
-                                                &_imu_data) != BMI088_NO_ERROR &&
-                                    count < 10;
-                count++)
+    bmi088_cali_imu_data = &_imu_data; // 全局观测数据
+
+    for (uint16_t count = 0; count < 10; ++count)
+    {
+        if (BMI088_init(&hspi2, &bmi_cfg, &_imu_data) == BMI088_NO_ERROR)
         {
-            if (count >= 255)
-            {
-                return PYRO_ERROR;
-            }
+            return PYRO_OK;
         }
-        return PYRO_OK;
+    }
+
+    return PYRO_ERROR;
 }
 void BMI088_driver_t::imu_update(){
     BMI088_Read(&_imu_data);

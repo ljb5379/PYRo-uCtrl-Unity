@@ -14,7 +14,6 @@ std::map<ins_key, ins_drv_t *> ins_map;
 
 IMU_Data_t *g_imu_data;//用于观测，可删
 
-
 ins_drv_t *ins_drv_t::get_instance(ins_key key)
 {
     if (ins_map.find(key) == ins_map.end())
@@ -29,6 +28,15 @@ ins_drv_t *ins_drv_t::get_instance(ins_key key)
 
 status_t ins_drv_t::init(const ins_config_t &config, imu_base_t* imu_drv)
 {
+    if (imu_drv == nullptr)
+    {
+        return PYRO_PARAM_ERROR;
+    }
+    if (_ins_task_handle != nullptr)
+    {
+        return PYRO_ALREADY_INIT;
+    }
+
     _config = config;
     _imu_drv = imu_drv;
 
@@ -67,41 +75,45 @@ status_t ins_drv_t::init(const ins_config_t &config, imu_base_t* imu_drv)
             _imu_x_idx = 1; _imu_y_idx = 0; _imu_z_idx = 2;
             _x_neg = false; _y_neg = false; _z_neg = true;
             break;
+        default:
+            return PYRO_PARAM_ERROR;
     }
-// 初始化EKF
-    if(_quaternion_ekf == nullptr)
+    // 初始化EKF
+    if (_quaternion_ekf == nullptr)
     {
         _quaternion_ekf = new QuaternionEKF_t();
+        if (_quaternion_ekf == nullptr)
+        {
+            return PYRO_NO_MEMORY;
+        }
     }
-// 观测数据
+
+    // 观测数据
     g_imu_data = &imu_data;
-// 初始化IMU
-    imu_config_t imu_config;
-    imu_config.calibrate = _config.calibrate;
+
+    // 初始化IMU
+    imu_config_t imu_config{};
+    imu_config.calibrate = _config.calibrate ? 1u : 0u;
     imu_config.gx_offset = _config.gx_offset;
     imu_config.gy_offset = _config.gy_offset;
     imu_config.gz_offset = _config.gz_offset;
-    imu_config.g_norm = _config.g_norm;
+    imu_config.g_norm    = _config.g_norm;
 
-    imu_drv->imu_init(imu_config);
-
-
-//初始化任务
-    if (_ins_task_handle == nullptr)
+    const status_t imu_status = _imu_drv->imu_init(imu_config);
+    if (imu_status != PYRO_OK && imu_status != PYRO_WARNING)
     {
-        xTaskCreate(__static_ins_task, "ins_task", 512, this, 2,
-                    &_ins_task_handle);
+        return imu_status;
     }
-    else
+
+    // 初始化任务
+    if (xTaskCreate(__static_ins_task, "ins_task", 512, this, 2,
+                    &_ins_task_handle) != pdPASS)
     {
+        _ins_task_handle = nullptr;
         return PYRO_ERROR;
     }
-    
-    if (_config.calibrate)
-    {
-        return PYRO_WARNING;
-    }
-    return PYRO_OK;
+
+    return imu_status;
 }
 
 void ins_drv_t::__static_ins_task(void *argument)
